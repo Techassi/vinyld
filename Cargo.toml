@@ -1,0 +1,11 @@
+[package]
+name = "vinyld"
+version = "0.0.1"
+edition = "2021"
+
+[dependencies]
+dotenvy = "0.15.3"
+serde = { version = "1.0.144", features = ["derive"] }
+sqlx = { version = "0.6", features = [ "runtime-tokio-native-tls" , "postgres" ] }
+tokio = { version = "1", features = ["full"] }
+toml = "0.5.9"
