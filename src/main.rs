@@ -2,6 +2,8 @@ use std::env;
 
 mod config;
 mod server;
+mod store;
+mod types;
 
 fn main() {
     let config_path = env::var("CONFIG_FILE").unwrap_or(String::new());
@@ -17,5 +19,12 @@ fn main() {
             Ok(cfg) => cfg,
             Err(_) => todo!(),
         };
+    }
+
+    let mut srv = server::Server::new(cfg);
+
+    match srv.run() {
+        Ok(_) => {}
+        Err(_) => todo!(),
     }
 }

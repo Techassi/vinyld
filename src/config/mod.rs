@@ -8,17 +8,23 @@ use crate::config::error::ConfigError;
 
 pub mod error;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub struct Config {
+    pub server: ServerOptions,
     pub store: StoreOptions,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub struct StoreOptions {
     pub username: String,
     pub password: String,
     pub database: String,
     pub host: String,
+}
+
+#[derive(Deserialize, Clone)]
+pub struct ServerOptions {
+    pub address: String,
 }
 
 impl Config {
@@ -33,22 +39,27 @@ impl Config {
         }
 
         // Required ENV vars
-        let password = match env::var("STORE_PASSWORD") {
+        let store_password = match env::var("STORE_PASSWORD") {
             Ok(password) => password,
             Err(_) => return Err(ConfigError::new("STORE_PASSWORD is required to be set")),
         };
 
         // ENV vars with fallback values
-        let username = env::var("STORE_USERNAME").unwrap_or(String::from("vinyld"));
-        let database = env::var("STORE_DATABASE").unwrap_or(String::from("vinyld"));
-        let host = env::var("STORE_HOST").unwrap_or(String::from("127.0.0.1"));
+        let store_username = env::var("STORE_USERNAME").unwrap_or(String::from("vinyld"));
+        let store_database = env::var("STORE_DATABASE").unwrap_or(String::from("vinyld"));
+        let store_host = env::var("STORE_HOST").unwrap_or(String::from("127.0.0.1"));
+
+        let server_address = env::var("SERVER_ADDRESS").unwrap_or(String::from("127.0.0.1:8000"));
 
         let config = Config {
             store: StoreOptions {
-                username,
-                password,
-                database,
-                host,
+                username: store_username,
+                password: store_password,
+                database: store_database,
+                host: store_host,
+            },
+            server: ServerOptions {
+                address: server_address,
             },
         };
 
