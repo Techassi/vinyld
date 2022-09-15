@@ -1,4 +1,4 @@
-use std::env;
+use std::{env, process};
 
 mod config;
 mod server;
@@ -25,6 +25,9 @@ fn main() {
 
     match srv.run() {
         Ok(_) => {}
-        Err(_) => todo!(),
+        Err(err) => {
+            println!("{}", err);
+            process::exit(1);
+        }
     }
 }
