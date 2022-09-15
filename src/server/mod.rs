@@ -32,15 +32,25 @@ impl Server {
             Err(err) => return Err(ServerError::new(format!("Store creation failed: {}", err))),
         };
 
+        match store.migrate().await {
+            Ok(_) => {}
+            Err(err) => {
+                return Err(ServerError::new(format!(
+                    "Failed to migrate one ore more tables: {}",
+                    err
+                )))
+            }
+        };
+
         let vinyl_router = Router::new()
-            .route("", routing::post(routes::create_vinyl))
-            .route("", routing::get(routes::get_vinyls))
-            .route(":id", routing::get(routes::get_vinyl))
-            .route(":id", routing::post(routes::update_vinyl))
-            .route(":id", routing::delete(routes::delete_vinyl));
+            .route("/", routing::post(routes::create_media_entry))
+            .route("/", routing::get(routes::get_media_entries))
+            .route("/:id", routing::get(routes::get_media_entry))
+            .route("/:id", routing::post(routes::update_media_entry))
+            .route("/:id", routing::delete(routes::delete_media_entry));
 
         let router = Router::new()
-            .nest("/api/vinyls", vinyl_router)
+            .nest("/api/media", vinyl_router)
             .layer(extract::Extension(store));
 
         let address: net::SocketAddr = match self.config.server.address.parse() {
