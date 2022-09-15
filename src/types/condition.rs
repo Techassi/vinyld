@@ -1,12 +1,13 @@
 use serde::{Deserialize, Serialize};
+use sqlx::Type;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Type, Clone)]
 pub enum BuyCondition {
     New,
     Used,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Type, Clone)]
 pub enum Condition {
     Mint,
     NearMint,
