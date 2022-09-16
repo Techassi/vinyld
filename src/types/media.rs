@@ -27,21 +27,21 @@ pub struct Media {
 impl From<RawMedia> for Media {
     fn from(rm: RawMedia) -> Self {
         Self {
-            id: rm.id.clone(),
-            title: rm.title.clone(),
-            media_type: rm.media_type.clone(),
+            id: rm.id,
+            title: rm.title,
+            media_type: rm.media_type,
             artists: Vec::new(),
             label: Label::default(),
-            catalogue: rm.catalogue.clone(),
+            catalogue: rm.catalogue,
             tracks: Vec::new(),
             release_date: rm.release_date.to_string(),
             purchase_date: rm.purchase_date.to_string(),
-            media_condition: rm.media_condition.clone(),
-            sleeve_condition: rm.sleeve_condition.clone(),
-            bought: rm.bought.clone(),
+            media_condition: rm.media_condition,
+            sleeve_condition: rm.sleeve_condition,
+            bought: rm.bought,
             created_at: rm.created_at.to_string(),
             modified_at: rm.modified_at.to_string(),
-            notes: rm.notes.clone(),
+            notes: rm.notes,
         }
     }
 }
