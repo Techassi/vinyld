@@ -2,10 +2,10 @@ use serde::Serialize;
 
 #[derive(Serialize)]
 pub struct Label {
-    id: String,
-    name: String,
-    label_code: String,
-    urls: String,
+    pub id: String,
+    pub name: String,
+    pub label_code: String,
+    pub urls: String,
 }
 
 impl Default for Label {

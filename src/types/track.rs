@@ -1,11 +1,11 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Track {
-    id: String,
-    title: String,
-    duration: usize,
-    record_side: String,
-    digital: bool,
-    urls: String,
+    pub id: String,
+    pub title: String,
+    pub duration: i32,
+    pub record_side: String,
+    pub digital: bool,
+    pub urls: String,
 }

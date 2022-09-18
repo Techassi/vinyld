@@ -3,7 +3,10 @@ use serde::Serialize;
 use serde_json::json;
 use sqlx::{types::time::PrimitiveDateTime, Type};
 
-use crate::types::{Artist, BuyCondition, Condition, Label, Track};
+use crate::{
+    store::models::MediaJoin,
+    types::{Artist, BuyCondition, Condition, Label, Track},
+};
 
 #[derive(Serialize)]
 pub struct Media {
@@ -24,6 +27,32 @@ pub struct Media {
     pub notes: String,
 }
 
+impl From<MediaJoin> for Media {
+    fn from(mj: MediaJoin) -> Self {
+        Self {
+            id: mj.media_id,
+            title: mj.media_title,
+            media_type: mj.media_media_type,
+            artists: Vec::new(),
+            label: Label {
+                id: mj.label_id,
+                name: mj.label_name,
+                label_code: mj.label_label_code,
+                urls: mj.label_urls,
+            },
+            catalogue: mj.media_catalogue,
+            tracks: Vec::new(),
+            release_date: mj.media_release_date.to_string(),
+            purchase_date: mj.media_purchase_date.to_string(),
+            media_condition: mj.media_media_condition,
+            sleeve_condition: mj.media_sleeve_condition,
+            bought: mj.media_bought,
+            created_at: mj.media_created_at.to_string(),
+            modified_at: mj.media_modified_at.to_string(),
+            notes: mj.media_notes,
+        }
+    }
+}
 impl From<RawMedia> for Media {
     fn from(rm: RawMedia) -> Self {
         Self {
@@ -42,28 +71,6 @@ impl From<RawMedia> for Media {
             created_at: rm.created_at.to_string(),
             modified_at: rm.modified_at.to_string(),
             notes: rm.notes,
-        }
-    }
-}
-
-impl From<&RawMedia> for Media {
-    fn from(rm: &RawMedia) -> Self {
-        Self {
-            id: rm.id.clone(),
-            title: rm.title.clone(),
-            media_type: rm.media_type.clone(),
-            artists: Vec::new(),
-            label: Label::default(),
-            catalogue: rm.catalogue.clone(),
-            tracks: Vec::new(),
-            release_date: rm.release_date.to_string(),
-            purchase_date: rm.purchase_date.to_string(),
-            media_condition: rm.media_condition.clone(),
-            sleeve_condition: rm.sleeve_condition.clone(),
-            bought: rm.bought.clone(),
-            created_at: rm.created_at.to_string(),
-            modified_at: rm.modified_at.to_string(),
-            notes: rm.notes.clone(),
         }
     }
 }

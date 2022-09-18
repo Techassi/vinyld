@@ -1,8 +1,8 @@
 use serde::Serialize;
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 pub struct Artist {
-    id: String,
-    name: String,
-    urls: String,
+    pub id: String,
+    pub name: String,
+    pub urls: String,
 }
