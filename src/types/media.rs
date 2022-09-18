@@ -130,3 +130,39 @@ impl IntoResponse for GetMediaEntriesResponse {
         body.into_response()
     }
 }
+
+#[derive(Serialize)]
+pub struct GetMediaEntryResponse {
+    status: String,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    entry: Option<Media>,
+}
+
+impl GetMediaEntryResponse {
+    pub fn success(entry: Media) -> Self {
+        Self {
+            status: String::from("success"),
+            entry: Some(entry),
+            error: None,
+        }
+    }
+
+    pub fn error<M: Into<String>>(message: M) -> Self {
+        Self {
+            status: String::from("error"),
+            error: Some(message.into()),
+            entry: None,
+        }
+    }
+}
+
+impl IntoResponse for GetMediaEntryResponse {
+    fn into_response(self) -> axum::response::Response {
+        let body = Json(json!(self));
+        body.into_response()
+    }
+}

@@ -1,6 +1,7 @@
 use std::{env, process};
 
 mod config;
+mod constants;
 mod server;
 mod store;
 mod types;
