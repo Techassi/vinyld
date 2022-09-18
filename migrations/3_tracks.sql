@@ -1,0 +1,9 @@
+CREATE TABLE IF NOT EXISTS tracks (
+  id VARCHAR(21) PRIMARY KEY,
+  title VARCHAR(255) NOT NULL,
+  duration INT NOT NULL,
+  record_side VARCHAR(2) NOT NULL,
+  digital BOOLEAN NOT NULL,
+  belongs_to VARCHAR(22) NOT NULL,
+  urls TEXT NOT NULL
+);

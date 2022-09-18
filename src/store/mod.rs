@@ -1,12 +1,18 @@
-use sqlx::{pool::PoolConnection, postgres::PgPool, query, query_as, Pool, Postgres};
+use std::collections::HashMap;
+
+use sqlx::{migrate, postgres::PgPool, query_as, Pool, Postgres};
 
 use crate::{
     config::StoreOptions,
-    store::error::StoreError,
-    types::{BuyCondition, Condition, Media, MediaType, RawMedia},
+    store::{
+        error::StoreError,
+        models::{ArtistsJoin, MediaJoin, TracksJoin},
+    },
+    types::{Artist, BuyCondition, Condition, Media, MediaType, Track},
 };
 
 mod error;
+pub mod models;
 
 #[derive(Clone)]
 pub struct Store {
@@ -30,16 +36,6 @@ impl Store {
         Ok(store)
     }
 
-    async fn get_conn(&self) -> Result<PoolConnection<Postgres>, StoreError> {
-        return match self.pool.acquire().await {
-            Ok(conn) => Ok(conn),
-            Err(err) => Err(StoreError::new(format!(
-                "Failed to acquire database connection: {}",
-                err
-            ))),
-        };
-    }
-
     fn dsn(opts: StoreOptions) -> String {
         format!(
             "postgres://{}:{}@{}/{}",
@@ -48,173 +44,93 @@ impl Store {
     }
 
     pub async fn migrate(&self) -> Result<(), StoreError> {
-        // Create the media table
-        match query!(
-            "CREATE TABLE IF NOT EXISTS media (
-                id VARCHAR(22) PRIMARY KEY,
-                title VARCHAR(255) NOT NULL,
-                media_type VARCHAR(32) NOT NULL,
-                catalogue VARCHAR(255) NOT NULL,
-                release_date TIMESTAMP NOT NULL,
-                purchase_date TIMESTAMP NOT NULL,
-                media_condition VARCHAR(32) NOT NULL,
-                sleeve_condition VARCHAR(32) NOT NULL,
-                bought VARCHAR(32) NOT NULL,
-                created_at TIMESTAMP NOT NULL,
-                modified_at TIMESTAMP NOT NULL,
-                notes TEXT NOT NULL
-            );"
-        )
-        .execute(&self.pool)
-        .await
-        {
-            Ok(_) => {}
-            Err(err) => {
-                return Err(StoreError::new(format!(
-                    "Failed to create 'media' table: {}",
-                    err
-                )))
-            }
+        return match migrate!().run(&self.pool).await {
+            Ok(_) => Ok(()),
+            Err(err) => Err(StoreError::new(format!("Migration failed: {}", err))),
         };
+    }
 
-        // Create the media - artist relation table
-        match query!(
-            "CREATE TABLE IF NOT EXISTS media_artists_rel (
-                id SERIAL PRIMARY KEY,
-                media_id VARCHAR(22) NOT NULL,
-                artist_id VARCHAR(22) NOT NULL
-            );"
-        )
-        .execute(&self.pool)
-        .await
-        {
-            Ok(_) => {}
-            Err(err) => {
-                return Err(StoreError::new(format!(
-                    "Failed to create 'media_artists_rel' table: {}",
-                    err
-                )))
+    fn group_artists_by_media_id(artists: Vec<ArtistsJoin>) -> HashMap<String, Vec<Artist>> {
+        let mut map: HashMap<String, Vec<Artist>> = HashMap::new();
+        for artist in artists {
+            if map.contains_key(&artist.media_id) {
+                if let Some(v) = map.get_mut(&artist.media_id) {
+                    v.push(Artist {
+                        id: artist.artist_id,
+                        name: artist.artist_name,
+                        urls: artist.artist_urls,
+                    })
+                }
+                continue;
             }
+
+            let v: Vec<Artist> = vec![Artist {
+                id: artist.artist_id,
+                name: artist.artist_name,
+                urls: artist.artist_urls,
+            }];
+            map.insert(artist.media_id, v);
         }
 
-        // Create the artists table
-        match query!(
-            "CREATE TABLE IF NOT EXISTS artists (
-                id VARCHAR(22) PRIMARY KEY,
-                name VARCHAR(255) NOT NULL,
-                urls TEXT
-            );"
-        )
-        .execute(&self.pool)
-        .await
-        {
-            Ok(_) => {}
-            Err(err) => {
-                return Err(StoreError::new(format!(
-                    "Failed to create the 'artists' table: {}",
-                    err
-                )))
+        return map;
+    }
+
+    fn group_tracks_by_media_id(tracks: Vec<TracksJoin>) -> HashMap<String, Vec<Track>> {
+        let mut map: HashMap<String, Vec<Track>> = HashMap::new();
+        for track in tracks {
+            if map.contains_key(&track.media_id) {
+                if let Some(v) = map.get_mut(&track.media_id) {
+                    v.push(Track {
+                        id: track.track_id,
+                        title: track.track_title,
+                        duration: track.track_duration,
+                        record_side: track.track_record_side,
+                        digital: track.track_digital,
+                        urls: track.track_urls,
+                    });
+                }
+                continue;
             }
+
+            let v: Vec<Track> = vec![Track {
+                id: track.track_id,
+                title: track.track_title,
+                duration: track.track_duration,
+                record_side: track.track_record_side,
+                digital: track.track_digital,
+                urls: track.track_urls,
+            }];
+            map.insert(track.media_id, v);
         }
 
-        // Create the media - tracks relation table
-        match query!(
-            "CREATE TABLE IF NOT EXISTS media_tracks_rel (
-                id SERIAL PRIMARY KEY,
-                media_id VARCHAR(22) NOT NULL,
-                track_id VARCHAR(22) NOT NULL
-            );"
-        )
-        .execute(&self.pool)
-        .await
-        {
-            Ok(_) => {}
-            Err(err) => {
-                return Err(StoreError::new(format!(
-                    "Failed to create 'media_tracks_rel' table: {}",
-                    err
-                )))
-            }
-        }
+        return map;
+    }
 
-        // Create track table
-        match query!(
-            "CREATE TABLE IF NOT EXISTS tracks (
-                id VARCHAR(22) PRIMARY KEY,
-                title VARCHAR(255) NOT NULL,
-                duration INT NOT NULL,
-                record_side VARCHAR(2),
-                digital BOOLEAN NOT NULL,
-                urls TEXT
-            );"
-        )
-        .execute(&self.pool)
-        .await
-        {
-            Ok(_) => {}
-            Err(err) => {
-                return Err(StoreError::new(format!(
-                    "Failed to create 'tracks' table: {}",
-                    err
-                )))
-            }
-        }
-
-        // Create the media - label relation table
-        match query!(
-            "CREATE TABLE IF NOT EXISTS media_label_rel (
-                id SERIAL PRIMARY KEY,
-                media_id VARCHAR(22) NOT NULL,
-                label_id VARCHAR(22) NOT NULL
-            );"
-        )
-        .execute(&self.pool)
-        .await
-        {
-            Ok(_) => {}
-            Err(err) => {
-                return Err(StoreError::new(format!(
-                    "Failed to create 'media_label_rel' table: {}",
-                    err
-                )))
-            }
-        }
-
-        // Create the labels table
-        match query!(
-            "CREATE TABLE IF NOT EXISTS labels (
-                id VARCHAR(22) PRIMARY KEY,
-                name VARCHAR(255) NOT NULL,
-                label_code VARCHAR(255),
-                urls TEXT
-            );"
-        )
-        .execute(&self.pool)
-        .await
-        {
-            Ok(_) => {}
-            Err(_) => todo!(),
-        }
-
+    pub async fn create_media(&self, media: Media) -> Result<(), StoreError> {
         Ok(())
     }
 
-    pub async fn create_media(&self, vinyl: Media) -> Result<(), StoreError> {
-        Ok(())
-    }
-
-    pub async fn get_media_entries(&self) -> Result<Vec<Media>, StoreError> {
+    pub async fn get_media_entries(
+        &self,
+        _offset: usize,
+        _limit: usize,
+    ) -> Result<Vec<Media>, StoreError> {
         let raw_media_entries = match query_as!(
-            RawMedia,
+            MediaJoin,
             r#"
                 SELECT
-                    id, title, media_type as "media_type: MediaType",
-                    catalogue, release_date, purchase_date,
-                    media_condition as "media_condition: Condition",
-                    sleeve_condition as "sleeve_condition: Condition",
-                    bought as "bought: BuyCondition",
-                    created_at, modified_at, notes
-                FROM media
+                    media.id as media_id, media.title as media_title, media.media_type as "media_media_type: MediaType",
+                    media.catalogue as media_catalogue, media.release_date as media_release_date,
+                    media.purchase_date as media_purchase_date, media.media_condition as "media_media_condition: Condition",
+                    media.sleeve_condition as "media_sleeve_condition: Condition", media.bought as "media_bought: BuyCondition",
+                    media.created_at as media_created_at, media.modified_at as media_modified_at, media.notes as media_notes,
+                    -- Label
+                    labels.id as label_id, labels.name as label_name, labels.label_code as label_label_code,
+                    labels.urls as label_urls
+                    FROM media
+                -- Label Joins
+                JOIN media_label_rel ON (media_label_rel.media_id = media.id)
+                JOIN labels ON (media_label_rel.label_id = labels.id)
             "#
         )
         .fetch_all(&self.pool)
@@ -229,18 +145,162 @@ impl Store {
             }
         };
 
-        // let media_entry_ids = media_entries;
-
-        let media_entries = raw_media_entries
+        // Collect media ids
+        let media_ids = raw_media_entries
             .iter()
-            .map(|e| Media::from(e))
-            .collect::<Vec<Media>>();
+            .map(|e| e.media_id.clone())
+            .collect::<Vec<String>>();
+
+        // Get artists data
+        let artists = match query_as!(
+            ArtistsJoin,
+            r#"
+                SELECT
+                    artists.id as artist_id, artists.name as artist_name, artists.urls as artist_urls,
+                    media_artists_rel.media_id as media_id
+                FROM artists
+                JOIN media_artists_rel ON (media_artists_rel.media_id = ANY($1))
+                WHERE artists.id = media_artists_rel.artist_id
+            "#,
+            &media_ids[..]
+        )
+        .fetch_all(&self.pool)
+        .await
+        {
+            Ok(artists) => artists,
+            Err(_) => todo!(),
+        };
+
+        let artists = Self::group_artists_by_media_id(artists);
+        println!("{}", artists.len());
+
+        // Get tracks data
+        let tracks = match query_as!(
+            TracksJoin,
+            r#"
+                SELECT
+                    tracks.id as track_id, tracks.title as track_title, tracks.duration as track_duration,
+                    tracks.record_side as track_record_side, tracks.digital as track_digital,
+                    tracks.urls as track_urls, tracks.belongs_to as media_id
+                FROM tracks
+                WHERE tracks.belongs_to = ANY($1)
+            "#,
+            &media_ids[..]
+        )
+        .fetch_all(&self.pool)
+        .await
+        {
+            Ok(tracks) => tracks,
+            Err(_) => todo!(),
+        };
+
+        let tracks = Self::group_tracks_by_media_id(tracks);
+
+        let mut media_entries: Vec<Media> = Vec::new();
+        for media_entry in raw_media_entries {
+            let mut entry = Media::from(media_entry);
+
+            if let Some(v) = artists.get(&entry.id) {
+                entry.artists = v.to_vec();
+            }
+
+            if let Some(v) = tracks.get(&entry.id) {
+                entry.tracks = v.to_vec();
+            }
+
+            media_entries.push(entry);
+        }
 
         Ok(media_entries)
     }
 
     pub async fn get_media_entry(&self, id: String) -> Result<Media, StoreError> {
-        todo!()
+        // Get base data
+        let raw_media_entry = match query_as!(
+            MediaJoin,
+            r#"
+                SELECT
+                    media.id as media_id, media.title as media_title, media.media_type as "media_media_type: MediaType",
+                    media.catalogue as media_catalogue, media.release_date as media_release_date,
+                    media.purchase_date as media_purchase_date, media.media_condition as "media_media_condition: Condition",
+                    media.sleeve_condition as "media_sleeve_condition: Condition", media.bought as "media_bought: BuyCondition",
+                    media.created_at as media_created_at, media.modified_at as media_modified_at, media.notes as media_notes,
+                    -- Label
+                    labels.id as label_id, labels.name as label_name, labels.label_code as label_label_code,
+                    labels.urls as label_urls
+                FROM media
+                -- Label Joins
+                JOIN media_label_rel ON (media_label_rel.media_id = media.id)
+                JOIN labels ON (media_label_rel.label_id = labels.id)
+                WHERE media.id = $1
+            "#,
+            id
+        )
+        .fetch_one(&self.pool)
+        .await
+        {
+            Ok(media_entry) => media_entry,
+            Err(err) => {
+                return Err(StoreError::new(format!(
+                    "Failed to fetch media entries from 'media' table: {}",
+                    err
+                )))
+            }
+        };
+
+        // Get artists data
+        let artists = match query_as!(
+            ArtistsJoin,
+            r#"
+                SELECT
+                    artists.id as artist_id, artists.name as artist_name, artists.urls as artist_urls,
+                    media_artists_rel.media_id as media_id
+                FROM artists
+                JOIN media_artists_rel ON (media_artists_rel.media_id = $1)
+                WHERE artists.id = media_artists_rel.artist_id
+            "#,
+            raw_media_entry.media_id
+        )
+        .fetch_all(&self.pool)
+        .await
+        {
+            Ok(artists) => artists,
+            Err(_) => todo!(),
+        };
+
+        let artists = Self::group_artists_by_media_id(artists);
+
+        // Get tracks data
+        let tracks = match query_as!(
+            TracksJoin,
+            r#"
+                SELECT
+                    tracks.id as track_id, tracks.title as track_title, tracks.duration as track_duration,
+                    tracks.record_side as track_record_side, tracks.digital as track_digital,
+                    tracks.urls as track_urls, tracks.belongs_to as media_id
+                FROM tracks
+                WHERE tracks.belongs_to = $1
+            "#,
+            raw_media_entry.media_id
+        )
+        .fetch_all(&self.pool)
+        .await
+        {
+            Ok(tracks) => tracks,
+            Err(_) => todo!(),
+        };
+
+        let tracks = Self::group_tracks_by_media_id(tracks);
+
+        let mut media_entry = Media::from(raw_media_entry);
+        if let Some(v) = artists.get(&media_entry.id) {
+            media_entry.artists = v.to_vec();
+        }
+        if let Some(v) = tracks.get(&media_entry.id) {
+            media_entry.tracks = v.to_vec();
+        }
+
+        Ok(media_entry)
     }
 
     pub async fn update_media_entry(&self, id: String, new_vinyl: Media) -> Result<(), StoreError> {
